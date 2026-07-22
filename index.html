@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sentinel Industrial Safety Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React & ReactDOM UMD -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <!-- Babel Standalone -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-900 pb-12 antialiased">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    const Icons = {
+      Shield: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-slate-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      ),
+      AlertTriangle: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-rose-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      ),
+      Activity: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></svg>
+      ),
+      FileText: () => (
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4 text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a1 1 0 0 0 1 1h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+      )
+    };
+
+    function App() {
+      const [currentTime, setCurrentTime] = useState(new Date().toLocaleTimeString());
+      const [telemetry, setTelemetry] = useState({
+        zoneA: { gas: 8.2, temp: 28.4, pressure: 101.3 },
+        zoneB: { gas: 8.0, temp: 42.1, pressure: 102.1 },
+        zoneC: { gas: 6.1, temp: 25.0, pressure: 100.8 }
+      });
+
+      const [isSimulated, setIsSimulated] = useState(false);
+      const [isMitigated, setIsMitigated] = useState(false);
+      const [activeAgentStep, setActiveAgentStep] = useState(0);
+      const [evacuationModal, setEvacuationModal] = useState(false);
+      const [showReportModal, setShowReportModal] = useState(false);
+      const [emailStatus, setEmailStatus] = useState(null);
+      const [showEmailModal, setShowEmailModal] = useState(false);
+
+      const [alertEmail, setAlertEmail] = useState('saipachipala8@gmail.com');
+      const [alertPhone, setAlertPhone] = useState('8184946886');
+
+      const [logs, setLogs] = useState([
+        { id: 'LOG-2026-0417', time: '11:45:10', zone: 'Zone B — Coke Oven', event: 'COMPOUND RISK: Methane 18 ppm + Hot Work #402', severity: 'High', standard: 'OISD-STD-105 §7.3', status: 'Auto-Flagged' },
+        { id: 'LOG-2026-0416', time: '11:07:41', zone: 'Zone C — Assembly', event: 'Conveyor load warning', severity: 'Low', standard: 'OISD-STD-105 §4.1', status: 'Resolved' },
+        { id: 'LOG-2026-0415', time: '09:18:55', zone: 'Zone A — Storage', event: 'Transient gas fluctuation — 12 ppm', severity: 'Medium', standard: 'OISD-STD-105 §7.1', status: 'Resolved' }
+      ]);
+
+      useEffect(() => {
+        const timer = setInterval(() => {
+          setCurrentTime(new Date().toLocaleTimeString());
+          setTelemetry(prev => ({
+            zoneA: { ...prev.zoneA, gas: +(8.0 + Math.random() * 0.4).toFixed(1) },
+            zoneB: { ...prev.zoneB, gas: isSimulated ? 18.0 : +(7.8 + Math.random() * 0.5).toFixed(1) },
+            zoneC: { ...prev.zoneC, gas: +(6.0 + Math.random() * 0.3).toFixed(1) }
+          }));
+        }, 2000);
+        return () => clearInterval(timer);
+      }, [isSimulated]);
+
+      const handleTriggerHazard = () => {
+        setIsSimulated(true);
+        setIsMitigated(false);
+        setActiveAgentStep(1);
+        setEmailStatus('sending');
+
+        setTimeout(() => setActiveAgentStep(2), 1000);
+        setTimeout(() => {
+          setActiveAgentStep(3);
+          setEmailStatus('sent');
+        }, 2000);
+
+        const newLog = {
+          id: `LOG-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+          time: new Date().toLocaleTimeString(),
+          zone: 'Zone B — Coke Oven Battery',
+          event: 'COMPOUND RISK: Methane 18 ppm + Hot Welding #402',
+          severity: 'High',
+          standard: 'OISD-STD-105 §7.3 | Factory Act §41-B',
+          status: 'Auto-Flagged'
+        };
+        setLogs(prev => [newLog, ...prev]);
+      };
+
+      const handleReset = () => {
+        setIsSimulated(false);
+        setIsMitigated(false);
+        setActiveAgentStep(0);
+        setEmailStatus(null);
+      };
+
+      return (
+        <div className="max-w-7xl mx-auto p-4 md:p-6 space-y-6">
+          
+          <header className="bg-white border border-slate-200 rounded-xl p-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-slate-100 rounded-lg border border-slate-200 shrink-0">
+                <Icons.Shield />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-slate-900 tracking-tight">
+                  Sentinel Industrial Safety Platform
+                </h1>
+                <p className="text-xs text-slate-500">
+                  Real-time Plant Safety Monitoring & Work Permit Risk Engine
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end">
+              <div className="flex flex-wrap items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600">
+                <div className="flex items-center gap-1 font-medium">
+                  <span>Email:</span>
+                  <input 
+                    type="email" 
+                    value={alertEmail}
+                    onChange={(e) => setAlertEmail(e.target.value)}
+                    className="bg-white text-slate-800 font-mono text-xs px-2 py-0.5 rounded border border-slate-300 focus:outline-none focus:border-blue-500 w-44"
+                  />
+                </div>
+                <div className="flex items-center gap-1 font-medium ml-2">
+                  <span>Phone:</span>
+                  <input 
+                    type="text" 
+                    value={alertPhone}
+                    onChange={(e) => setAlertPhone(e.target.value)}
+                    className="bg-white text-slate-800 font-mono text-xs px-2 py-0.5 rounded border border-slate-300 focus:outline-none focus:border-blue-500 w-28"
+                  />
+                </div>
+              </div>
+
+              <div className="text-xs font-mono px-3 py-1.5 bg-slate-100 rounded-lg border border-slate-200 text-slate-700">
+                {currentTime}
+              </div>
+
+              <button 
+                onClick={() => setEvacuationModal(true)}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg transition shadow-sm">
+                Evacuate Plant
+              </button>
+            </div>
+          </header>
+
+          {emailStatus && (
+            <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row items-center justify-between gap-3 text-xs transition ${
+              emailStatus === 'sending' 
+                ? 'bg-amber-50 border-amber-300 text-amber-900' 
+                : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+            }`}>
+              <div>
+                <span className="font-bold">
+                  {emailStatus === 'sending' ? 'Sending Emergency Notifications...' : 'Emergency Email & SMS Dispatched'}
+                </span>
+                <p className="text-xs opacity-80 mt-0.5">
+                  Target Email: <strong>{alertEmail}</strong> • Mobile: <strong>+91 {alertPhone}</strong>
+                </p>
+              </div>
+              <button 
+                onClick={() => setShowEmailModal(true)}
+                className="bg-white text-slate-800 border border-slate-300 px-3 py-1 rounded-md text-xs font-semibold shadow-sm hover:bg-slate-50">
+                View Dispatch Transcript
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <div className="lg:col-span-7 space-y-6">
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Icons.Activity />
+                    <h2 className="text-sm font-bold text-slate-900">Plant Spatial Telemetry Overview</h2>
+                  </div>
+                  <span className="text-xs text-slate-500 font-mono">SCADA Stream Active</span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  
+                  {/* Zone A */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500">ZONE A</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        NORMAL
+                      </span>
+                    </div>
+                    <h3 className="text-xs font-bold text-slate-800">Storage Tanks</h3>
+                    <div className="font-mono text-xs space-y-1 pt-2 border-t border-slate-200 text-slate-600">
+                      <div className="flex justify-between"><span>Gas:</span><span className="font-bold text-slate-900">{telemetry.zoneA.gas} ppm</span></div>
+                      <div className="flex justify-between"><span>Temp:</span><span>{telemetry.zoneA.temp} °C</span></div>
+                    </div>
+                  </div>
+
+                  {/* Zone B */}
+                  <div className={`border rounded-lg p-4 space-y-2 transition ${
+                    isSimulated && !isMitigated 
+                      ? 'bg-rose-50 border-rose-400' 
+                      : 'bg-slate-50 border-slate-200'
+                  }`}>
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500">ZONE B</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        isSimulated && !isMitigated 
+                          ? 'bg-rose-600 text-white' 
+                          : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                      }`}>
+                        {isSimulated && !isMitigated ? 'CRITICAL RISK' : 'NORMAL'}
+                      </span>
+                    </div>
+                    <h3 className="text-xs font-bold text-slate-800">Coke Oven Battery</h3>
+                    <div className="font-mono text-xs space-y-1 pt-2 border-t border-slate-200 text-slate-600">
+                      <div className="flex justify-between">
+                        <span>Gas:</span>
+                        <span className={`font-bold ${isSimulated && !isMitigated ? 'text-rose-700' : 'text-slate-900'}`}>
+                          {telemetry.zoneB.gas} ppm
+                        </span>
+                      </div>
+                      <div className="flex justify-between"><span>Temp:</span><span>{telemetry.zoneB.temp} °C</span></div>
+                    </div>
+                    <div className="pt-2 text-[11px] text-slate-500">
+                      Permit: <span className="font-medium text-slate-800">{isSimulated ? 'Hot Work #402 (Welding)' : 'None'}</span>
+                    </div>
+                  </div>
+
+                  {/* Zone C */}
+                  <div className="bg-slate-50 border border-slate-200 rounded-lg p-4 space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs font-bold text-slate-500">ZONE C</span>
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                        NORMAL
+                      </span>
+                    </div>
+                    <h3 className="text-xs font-bold text-slate-800">Assembly Line</h3>
+                    <div className="font-mono text-xs space-y-1 pt-2 border-t border-slate-200 text-slate-600">
+                      <div className="flex justify-between"><span>Gas:</span><span className="font-bold text-slate-900">{telemetry.zoneC.gas} ppm</span></div>
+                      <div className="flex justify-between"><span>Temp:</span><span>{telemetry.zoneC.temp} °C</span></div>
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                  <span className="text-xs text-slate-500">Simulation Controls:</span>
+                  <div>
+                    {isSimulated ? (
+                      <button 
+                        onClick={handleReset}
+                        className="bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300">
+                        Reset System
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={handleTriggerHazard}
+                        className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm">
+                        Simulate Compound Hazard Event
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <div className="lg:col-span-5 space-y-6">
+              <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+                <div className="border-b border-slate-100 pb-3">
+                  <h2 className="text-sm font-bold text-slate-900">Multi-Agent Risk Engine</h2>
+                  <p className="text-xs text-slate-500">Automated permit and gas telemetry correlation</p>
+                </div>
+
+                <div className="space-y-3">
+                  <div className={`p-3 rounded-lg border text-xs ${activeAgentStep >= 1 ? 'bg-slate-50 border-slate-300' : 'bg-slate-50/50 border-slate-200 text-slate-400'}`}>
+                    <span className="font-bold block text-slate-800">Agent 1: Sensor Stream Analyzer</span>
+                    <p className="text-slate-600 mt-0.5">
+                      {activeAgentStep >= 1 ? 'Methane gas accumulation recorded at 18.0 ppm in Zone B.' : 'Monitoring gas sensor stream...'}
+                    </p>
+                  </div>
+
+                  <div className={`p-3 rounded-lg border text-xs ${activeAgentStep >= 2 ? 'bg-slate-50 border-slate-300' : 'bg-slate-50/50 border-slate-200 text-slate-400'}`}>
+                    <span className="font-bold block text-slate-800">Agent 2: Work Permit Cross-Referencer</span>
+                    <p className="text-slate-600 mt-0.5">
+                      {activeAgentStep >= 2 ? 'Active Hot Work Permit #402 (Welding) identified in Zone B.' : 'Cross-referencing active work permits...'}
+                    </p>
+                  </div>
+
+                  <div className={`p-3 rounded-lg border text-xs ${activeAgentStep >= 3 ? 'bg-rose-50 border-rose-300 text-rose-900' : 'bg-slate-50/50 border-slate-200 text-slate-400'}`}>
+                    <span className="font-bold block">Agent 3: Compound Risk Evaluator</span>
+                    <p className="mt-0.5">
+                      {activeAgentStep >= 3 ? 'OISD-STD-105 §7.3 Violation: Flammable gas + open flame proximity. Permit #402 flagged for revocation.' : 'Evaluating risk rules...'}
+                    </p>
+                  </div>
+                </div>
+
+                {isSimulated && (
+                  <div className="pt-2 border-t border-slate-100 flex justify-between items-center">
+                    <span className="text-xs text-slate-600">Action:</span>
+                    {isMitigated ? (
+                      <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
+                        Permit #402 Revoked
+                      </span>
+                    ) : (
+                      <button 
+                        onClick={() => setIsMitigated(true)}
+                        className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm">
+                        Confirm Permit Revocation
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm space-y-4">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900">Compliance Audit Log</h2>
+                <p className="text-xs text-slate-500">OISD-STD-105 & Factory Act Section 41 records</p>
+              </div>
+              <button 
+                onClick={() => setShowReportModal(true)}
+                className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-300 flex items-center gap-1.5">
+                <Icons.FileText />
+                View Full Audit Report
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left font-mono text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 text-slate-500">
+                    <th className="pb-2 font-semibold">Incident ID</th>
+                    <th className="pb-2 font-semibold">Time</th>
+                    <th className="pb-2 font-semibold">Zone</th>
+                    <th className="pb-2 font-semibold">Description</th>
+                    <th className="pb-2 font-semibold">Severity</th>
+                    <th className="pb-2 font-semibold">Standard</th>
+                    <th className="pb-2 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {logs.map((log) => (
+                    <tr key={log.id}>
+                      <td className="py-2.5 font-bold text-slate-900">{log.id}</td>
+                      <td className="py-2.5 text-slate-500">{log.time}</td>
+                      <td className="py-2.5">{log.zone}</td>
+                      <td className="py-2.5 text-slate-900">{log.event}</td>
+                      <td className="py-2.5">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          log.severity === 'High' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {log.severity}
+                        </span>
+                      </td>
+                      <td className="py-2.5 text-slate-500">{log.standard}</td>
+                      <td className="py-2.5 font-semibold text-emerald-700">{log.status}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {showEmailModal && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-white border border-slate-300 rounded-xl max-w-lg w-full p-6 space-y-4 shadow-xl">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                  <h3 className="text-sm font-bold text-slate-900">Emergency Alert Transcript</h3>
+                  <button onClick={() => setShowEmailModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 font-mono text-xs space-y-2 text-slate-700">
+                  <p><strong>Email Recipient:</strong> <span className="text-blue-700">{alertEmail}</span></p>
+                  <p><strong>Phone Contact:</strong> <span className="text-blue-700">+91 {alertPhone}</span></p>
+                  <p><strong>Subject:</strong> 🚨 CRITICAL COMPOUND HAZARD: Zone B</p>
+                  <div className="border-t border-slate-200 pt-2 text-slate-800 space-y-1">
+                    <p className="font-bold text-rose-700">EMERGENCY NOTICE</p>
+                    <p>Compound risk detected in Zone B (Coke Oven Battery).</p>
+                    <p>Methane Level: 18.0 ppm | Active Permit: Hot Work #402 (Welding)</p>
+                    <p>Standard Reference: OISD-STD-105 §7.3</p>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setShowEmailModal(false)} className="bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {showReportModal && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-white border border-slate-300 rounded-xl max-w-xl w-full p-6 space-y-4 shadow-xl">
+                <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                  <h3 className="text-sm font-bold text-slate-900">OISD Regulatory Audit Report</h3>
+                  <button onClick={() => setShowReportModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                </div>
+                <div className="font-mono text-xs space-y-2 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <p className="font-bold text-slate-900">OISD-STD-105 & Factory Act Section 41 Compliance Report</p>
+                  <p className="text-slate-500">Generated: {new Date().toLocaleString()}</p>
+                  <div className="border-t border-slate-200 pt-2 space-y-2">
+                    {logs.map((l, index) => (
+                      <div key={l.id} className="p-2 bg-white rounded border border-slate-200">
+                        <p className="font-bold text-slate-800">{index + 1}. {l.id} | {l.zone}</p>
+                        <p className="text-slate-600">{l.event}</p>
+                        <p className="text-slate-500">{l.standard} — {l.status}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => window.print()} className="bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold">
+                    Print Report
+                  </button>
+                  <button onClick={() => setShowReportModal(false)} className="bg-slate-900 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {evacuationModal && (
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-white border border-rose-300 rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl">
+                <div className="flex items-center gap-2 text-rose-700">
+                  <Icons.AlertTriangle />
+                  <h3 className="text-base font-bold text-slate-900">Confirm Plant Evacuation</h3>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Are you sure you want to trigger a plant-wide emergency evacuation drill? Alerts will be sent to <strong>{alertEmail}</strong> and <strong>+91 {alertPhone}</strong>.
+                </p>
+                <div className="flex justify-end gap-2">
+                  <button onClick={() => setEvacuationModal(false)} className="bg-slate-100 text-slate-700 border border-slate-300 px-3 py-1.5 rounded-lg text-xs font-semibold">
+                    Cancel
+                  </button>
+                  <button onClick={() => { setEmailStatus('sent'); setEvacuationModal(false); }} className="bg-rose-600 text-white px-3 py-1.5 rounded-lg text-xs font-semibold">
+                    Confirm Evacuation
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
